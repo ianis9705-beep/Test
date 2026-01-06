@@ -15,9 +15,9 @@ export const speakText = (text: string, voiceName: string, onEnd?: () => void) =
 
   const utterance = new SpeechSynthesisUtterance(text);
   
-  // Căutăm vocea preferată
-  const voices = window.speechSynthesis.getVoices();
-  const selectedVoice = voices.find(v => v.name === voiceName);
+  // Încercăm să găsim vocea. Dacă lista e goală (Chrome bug uneori), reîncercăm.
+  let voices = window.speechSynthesis.getVoices();
+  let selectedVoice = voices.find(v => v.name === voiceName);
   
   if (selectedVoice) {
     utterance.voice = selectedVoice;
@@ -27,12 +27,16 @@ export const speakText = (text: string, voiceName: string, onEnd?: () => void) =
   utterance.rate = 1.0; 
   utterance.pitch = 1.0;
 
+  // Handler de finalizare
   if (onEnd) {
     utterance.onend = onEnd;
     utterance.onerror = (e) => {
       console.error("TTS Error", e);
-      onEnd();
+      onEnd(); // Apelăm onEnd chiar și la eroare pentru a debloca UI-ul (starea 'speaking')
     };
+  } else {
+    // Dacă nu avem callback, punem unul gol pentru siguranță
+    utterance.onerror = (e) => console.error("TTS Error", e);
   }
 
   window.speechSynthesis.speak(utterance);
@@ -54,6 +58,7 @@ export class SpeechRecognizer {
     onEnd: () => void,
     onError: (err: any) => void
   ) {
+    // Verificare compatibilitate browser
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     
     if (!SpeechRecognition) {
@@ -67,8 +72,11 @@ export class SpeechRecognizer {
     this.recognition.lang = 'ro-RO'; // Default română, poate fi configurabil
 
     this.recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript;
-      onResult(transcript);
+      // Verificăm dacă există rezultate valide
+      if (event.results && event.results[0] && event.results[0][0]) {
+        const transcript = event.results[0][0].transcript;
+        onResult(transcript);
+      }
     };
 
     this.recognition.onend = () => {
@@ -77,7 +85,10 @@ export class SpeechRecognizer {
     };
 
     this.recognition.onerror = (event: any) => {
-      console.error("STT Error:", event.error);
+      // Ignorăm eroarea 'no-speech' care apare des dacă e liniște
+      if (event.error !== 'no-speech') {
+        console.error("STT Error:", event.error);
+      }
       this.isListening = false;
       onError(event.error);
     };
@@ -89,7 +100,9 @@ export class SpeechRecognizer {
         this.recognition.start();
         this.isListening = true;
       } catch (e) {
-        console.error("Could not start recognition", e);
+        // Uneori browserul crede că încă ascultă
+        console.warn("Recognition start retry", e);
+        this.isListening = false;
       }
     }
   }

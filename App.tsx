@@ -1,61 +1,90 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Message, JarvisStatus, AppSettings } from './types';
+import { Message, JarvisStatus, AppSettings, Tool } from './types';
 import { JarvisAvatar } from './components/JarvisAvatar';
 import { ChatInterface } from './components/ChatInterface';
 import { SettingsPanel } from './components/SettingsPanel';
+import { ToolList } from './components/ToolList';
 import { OllamaService } from './services/ollamaService';
+import { MemoryService } from './services/memoryService';
+import { ToolRegistry } from './services/toolRegistry';
 import { SpeechRecognizer, speakText, stopSpeaking } from './services/audioService';
-import { ArrowLeftIcon, Cog6ToothIcon, WrenchScrewdriverIcon } from '@heroicons/react/24/solid';
+import { ArrowLeftIcon, Cog6ToothIcon, WrenchScrewdriverIcon, TrashIcon } from '@heroicons/react/24/solid';
 
 const App: React.FC = () => {
   // --- STATE ---
   const [activeTab, setActiveTab] = useState<'home' | 'settings' | 'tools'>('home');
   const [status, setStatus] = useState<JarvisStatus>('idle');
+  
+  // Starea inițială vine din memorie (dacă există), altfel gol
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
+  const [availableTools, setAvailableTools] = useState<Tool[]>([]);
   
   // Setări implicite
-  const [settings, setSettings] = useState<AppSettings>({
+  const defaultSettings: AppSettings = {
     ollamaUrl: 'http://localhost:11434',
-    model: '', // Va fi setat automat dacă e gol
+    model: '',
     voiceName: '',
     useVoiceOutput: true
-  });
+  };
 
-  // Referință pentru recunoașterea vocală pentru a persista între randări
+  const [settings, setSettings] = useState<AppSettings>(defaultSettings);
+
+  // Referință pentru recunoașterea vocală
   const recognizerRef = useRef<SpeechRecognizer | null>(null);
 
-  // --- INIT ---
+  // --- INIT (Load Memory & Tools) ---
   useEffect(() => {
-    // Încercăm să selectăm un model default dacă nu există unul
-    if (!settings.model) {
-      OllamaService.getModels(settings.ollamaUrl).then(models => {
+    // 1. Încarcă Setările
+    const savedSettings = MemoryService.loadSettings(defaultSettings);
+    setSettings(savedSettings);
+
+    // 2. Încarcă Istoricul
+    const savedHistory = MemoryService.loadConversation();
+    setMessages(savedHistory);
+
+    // 3. Încarcă Tool-urile (Simulare scanare folder)
+    setAvailableTools(ToolRegistry.getAvailableTools());
+
+    // 4. Auto-detect model dacă nu există în setări salvate
+    if (!savedSettings.model) {
+      OllamaService.getModels(savedSettings.ollamaUrl).then(models => {
         if (models.length > 0) {
-          setSettings(prev => ({ ...prev, model: models[0].name }));
+          const newSettings = { ...savedSettings, model: models[0].name };
+          setSettings(newSettings);
+          MemoryService.saveSettings(newSettings);
         }
       });
     }
-  }, [settings.ollamaUrl, settings.model]);
+  }, []); // Run once on mount
 
-  // Inițializare Speech Recognizer
+  // Initialize Speech Recognizer
   useEffect(() => {
     recognizerRef.current = new SpeechRecognizer(
-      (text) => {
-        // Când primim text de la microfon
-        handleUserMessage(text);
-      },
-      () => {
-        // Când se oprește ascultarea (fără rezultat sau eroare)
-        if (status === 'listening') setStatus('idle');
-      },
+      (text) => handleUserMessage(text),
+      () => { if (status === 'listening') setStatus('idle'); },
       (err) => {
         console.error("Speech Error", err);
         setStatus('idle');
       }
     );
-  }, [status]); // Re-creăm dacă status se schimbă (simplificare pentru scope)
+  }, [status]);
 
   // --- HANDLERS ---
+
+  // Salvează setările când sunt modificate în UI
+  const handleSettingsSave = (newSettings: AppSettings) => {
+    setSettings(newSettings);
+    MemoryService.saveSettings(newSettings);
+  };
+
+  // Șterge memoria
+  const handleClearMemory = () => {
+    if (confirm("Ești sigur că vrei să ștergi istoricul conversației?")) {
+      setMessages([]);
+      MemoryService.clearMemory();
+    }
+  };
 
   const handleMicClick = () => {
     if (status === 'speaking') {
@@ -84,20 +113,24 @@ const App: React.FC = () => {
       timestamp: Date.now()
     };
     
-    setMessages(prev => [...prev, userMsg]);
+    // Update local state AND memory
+    const updatedMessages = [...messages, userMsg];
+    setMessages(updatedMessages);
+    MemoryService.saveConversation(updatedMessages);
+    
     setInputText('');
     setStatus('thinking');
 
     try {
-      // 2. Trimite la Ollama
       if (!settings.model) {
         throw new Error("Nu este selectat niciun model LLM. Mergi la Setări.");
       }
 
+      // 2. Trimite la Ollama
       const responseText = await OllamaService.chat(
         settings.ollamaUrl,
         settings.model,
-        [...messages, userMsg]
+        updatedMessages
       );
 
       // 3. Adaugă răspuns Jarvis
@@ -107,7 +140,10 @@ const App: React.FC = () => {
         content: responseText,
         timestamp: Date.now()
       };
-      setMessages(prev => [...prev, aiMsg]);
+      
+      const finalMessages = [...updatedMessages, aiMsg];
+      setMessages(finalMessages);
+      MemoryService.saveConversation(finalMessages);
 
       // 4. Speak (TTS)
       if (settings.useVoiceOutput) {
@@ -141,22 +177,27 @@ const App: React.FC = () => {
   const renderContent = () => {
     switch (activeTab) {
       case 'settings':
-        return <SettingsPanel settings={settings} onSave={setSettings} />;
+        return <SettingsPanel settings={settings} onSave={handleSettingsSave} />;
       case 'tools':
-        return (
-          <div className="text-center p-10 text-gray-500">
-            <WrenchScrewdriverIcon className="h-16 w-16 mx-auto mb-4 opacity-50" />
-            <h2 className="text-xl">Modulul Tools</h2>
-            <p>Faza 3: Aici vor fi încărcate automat uneltele din folder.</p>
-          </div>
-        );
+        return <ToolList tools={availableTools} />;
       case 'home':
       default:
         return (
           <div className="flex flex-col h-full max-w-4xl mx-auto w-full">
             {/* Zona Avatar */}
-            <div className="flex-none mb-4">
+            <div className="flex-none mb-4 relative">
               <JarvisAvatar status={status} onClick={handleMicClick} />
+              
+              {/* Buton discret Clear Memory */}
+              {messages.length > 0 && (
+                <button 
+                  onClick={handleClearMemory}
+                  className="absolute top-0 right-0 p-2 text-gray-600 hover:text-red-500 transition-colors"
+                  title="Șterge Memoria Conversației"
+                >
+                  <TrashIcon className="h-5 w-5" />
+                </button>
+              )}
             </div>
 
             {/* Zona Chat */}
@@ -194,23 +235,22 @@ const App: React.FC = () => {
             className="flex items-center gap-2 cursor-pointer"
             onClick={() => setActiveTab('home')}
           >
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-jarvis-blue to-blue-700"></div>
-            <h1 className="text-xl font-bold tracking-wider text-white">JARVIS <span className="text-xs text-jarvis-blue font-normal px-1 border border-jarvis-blue rounded">LOCAL</span></h1>
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-jarvis-blue to-blue-700 shadow-[0_0_15px_rgba(0,240,255,0.3)]"></div>
+            <h1 className="text-xl font-bold tracking-wider text-white">JARVIS <span className="text-xs text-jarvis-blue font-normal px-1 border border-jarvis-blue rounded">CORE</span></h1>
           </div>
           
           <div className="flex gap-4">
             <button
               onClick={() => setActiveTab('home')}
               className={`p-2 rounded-lg transition-colors ${activeTab === 'home' ? 'text-jarvis-blue bg-white/10' : 'text-gray-400 hover:text-white'}`}
-              title="Home"
+              title="Home (Chat)"
             >
               <ArrowLeftIcon className="h-6 w-6" /> 
-              {/* Note: Icon used as 'Back to Home' metaphor */}
             </button>
             <button
               onClick={() => setActiveTab('tools')}
               className={`p-2 rounded-lg transition-colors ${activeTab === 'tools' ? 'text-jarvis-blue bg-white/10' : 'text-gray-400 hover:text-white'}`}
-              title="Tools"
+              title="Tools Registry"
             >
               <WrenchScrewdriverIcon className="h-6 w-6" />
             </button>

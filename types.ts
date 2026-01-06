@@ -27,6 +27,17 @@ export interface OllamaModel {
   size: number;
 }
 
+// Interfața pentru un Tool (Modularitate)
+export interface Tool {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  isEnabled: boolean;
+  type: 'core' | 'extension';
+  icon?: string;
+}
+
 // Extindem Window pentru Speech Recognition (API experimental în unele browsere)
 declare global {
   interface Window {

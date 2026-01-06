@@ -1,20 +1,42 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Jarvis Web AI (Local)
 
-# Run and deploy your AI Studio app
+Un asistent personal AI modular, care rulează 100% local în browser, folosind Ollama ca backend.
 
-This contains everything you need to run your app locally.
+## 🚀 Cum să pornești rapid
 
-View your app in AI Studio: https://ai.studio/apps/drive/1vZGihjVHW9cSB_uMBOjSE24NYG7PbLZi
+### Cerințe prealabile
+1. **Ollama**: Descarcă și instalează [Ollama](https://ollama.ai).
+2. **Node.js**: Descarcă și instalează [Node.js](https://nodejs.org).
 
-## Run Locally
+### Pasul 1: Configurează Ollama
+Deschide un terminal și rulează comanda următoare pentru a permite conexiunea din browser:
+```bash
+OLLAMA_ORIGINS="*" ollama serve
+```
+*(Lasă această fereastră deschisă)*
 
-**Prerequisites:**  Node.js
+### Pasul 2: Pornește Jarvis
+**Windows:**
+Dublu-click pe fișierul `INSTALL_WINDOWS.bat`.
 
+**Mac / Linux:**
+Deschide un terminal în acest folder și rulează:
+```bash
+chmod +x INSTALL_MAC_LINUX.sh
+./INSTALL_MAC_LINUX.sh
+```
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+Aplicația se va deschide automat în browser la adresa `http://localhost:3000`.
+
+## 🛠️ Caracteristici
+
+- **Faza 1:** Chat Text & Voice (Speech-to-Text & Text-to-Speech)
+- **Faza 2:** Memorie Locală (Conversațiile se salvează în browser)
+- **Faza 3:** Arhitectură Modulară (Detectare automată tool-uri)
+
+## 🏗️ Tehnologii
+- React + TypeScript
+- Vite (Build tool)
+- Tailwind CSS (Styling)
+- Web Speech API (Voce nativă)
+- LocalStorage (Persistență)
