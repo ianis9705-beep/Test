@@ -1,0 +1,7 @@
+{
+  "name": "Jarvis Web AI",
+  "description": "Un asistent personal AI modular, care rulează local folosind Ollama.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
