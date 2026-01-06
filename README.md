@@ -8,12 +8,19 @@ Un asistent personal AI modular, care rulează 100% local în browser, folosind 
 1. **Ollama**: Descarcă și instalează [Ollama](https://ollama.ai).
 2. **Node.js**: Descarcă și instalează [Node.js](https://nodejs.org).
 
-### Pasul 1: Configurează Ollama
-Deschide un terminal și rulează comanda următoare pentru a permite conexiunea din browser:
-```bash
-OLLAMA_ORIGINS="*" ollama serve
+### Pasul 1: Configurează Ollama (FOARTE IMPORTANT)
+
+Dacă tocmai ai instalat Ollama, **dă restart la PC** sau închide toate terminalele.
+
+Deschide **Command Prompt (CMD)** și rulează comanda asta pentru a permite conexiunea:
+
+```cmd
+set OLLAMA_ORIGINS=* && ollama serve
 ```
-*(Lasă această fereastră deschisă)*
+
+*(Dacă folosești PowerShell, comanda este: `$env:OLLAMA_ORIGINS="*"; ollama serve`)*
+
+Lasă fereastra cu Ollama deschisă!
 
 ### Pasul 2: Pornește Jarvis
 **Windows:**
